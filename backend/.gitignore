@@ -1,0 +1,28 @@
+# Entorno virtual
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Variables de entorno (NUNCA subir contraseñas)
+.env
+
+# Base de datos local
+db.sqlite3
+*.sqlite3
+
+# Archivos de Django
+staticfiles/
+media/
+
+# Archivos del sistema/editor
+.vscode/
+.idea/
+*.swp
+
+# PDFs de prueba
+reporte_equipo.pdf
+reporte_general.pdf
