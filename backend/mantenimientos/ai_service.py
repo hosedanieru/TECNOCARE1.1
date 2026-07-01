@@ -1,5 +1,5 @@
 import json
-from google import genai
+from groq import Groq
 from django.conf import settings
 
 PROMPT_SISTEMA = """Eres un asistente técnico especializado en mantenimiento de equipos
@@ -12,8 +12,8 @@ sin marcas de markdown, con esta estructura exacta:
   "solucion_sugerida": "string con los pasos recomendados para solucionarlo",
   "prioridad_sugerida": "BAJA" | "MEDIA" | "ALTA" | "CRITICA",
   "tipo_sugerido": "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO",
-  "costo_repuestos_estimado": número en pesos colombianos (solo el número, sin signos),
-  "costo_mano_obra_estimado": número en pesos colombianos (solo el número, sin signos),
+  "costo_repuestos_estimado": numero en pesos colombianos sin signos ni puntos,
+  "costo_mano_obra_estimado": numero en pesos colombianos sin signos ni puntos,
   "justificacion": "string breve explicando la prioridad y los costos estimados"
 }
 
@@ -23,17 +23,15 @@ Reglas para la prioridad:
 - MEDIA: hay una falla pero el equipo sigue operativo.
 - BAJA: mantenimiento de rutina o mejora preventiva, sin urgencia.
 
-Reglas para los costos (en pesos colombianos):
+Reglas para los costos en pesos colombianos:
 - Estima costos realistas para Colombia.
-- Repuestos: costo de partes/materiales necesarios.
-- Mano de obra: costo del tiempo del técnico (aprox $50.000/hora en Colombia).
+- Mano de obra: aproximadamente 50000 por hora de trabajo técnico.
 - Si no se necesitan repuestos, pon 0.
-
-Responde SOLO con el JSON, sin explicaciones adicionales."""
+- Devuelve solo números enteros, sin puntos ni comas."""
 
 
 def obtener_sugerencia_ia(descripcion, categoria_equipo=None, marca=None, modelo=None):
-    cliente = genai.Client(api_key=settings.GEMINI_API_KEY)
+    cliente = Groq(api_key=settings.GROQ_API_KEY)
 
     contexto = ""
     if categoria_equipo:
@@ -43,14 +41,19 @@ def obtener_sugerencia_ia(descripcion, categoria_equipo=None, marca=None, modelo
     if modelo:
         contexto += f"Modelo: {modelo}. "
 
-    prompt = f"{PROMPT_SISTEMA}\n\n{contexto}\nDescripción del problema: {descripcion}"
+    mensaje_usuario = f"{contexto}\nDescripción del problema: {descripcion}"
 
-    respuesta = cliente.models.generate_content(
-        model='gemini-1.5-flash',
-        contents=prompt,
+    respuesta = cliente.chat.completions.create(
+        model="openai/gpt-oss-20b",
+        messages=[
+            {"role": "system", "content": PROMPT_SISTEMA},
+            {"role": "user", "content": mensaje_usuario},
+        ],
+        temperature=0.3,
+        max_tokens=500,
     )
 
-    texto = respuesta.text.strip()
+    texto = respuesta.choices[0].message.content.strip()
     texto = texto.replace('```json', '').replace('```', '').strip()
 
     return json.loads(texto)

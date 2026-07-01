@@ -1,7 +1,10 @@
+import json
+
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from .ai_service import obtener_sugerencia_ia
 from .models import Mantenimiento, Intervencion
 from .serializers import (
     MantenimientoListSerializer,
@@ -113,6 +116,39 @@ class MantenimientoViewSet(viewsets.ModelViewSet):
             'total': qs.count(),
         }
         return Response(data)
+
+    @action(detail=False, methods=['post'])
+    def sugerencia_ia(self, request):
+        descripcion = request.data.get('descripcion', '').strip()
+        if not descripcion:
+            return Response(
+                {'detail': 'La descripción es obligatoria.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        categoria_equipo = request.data.get('categoria_equipo', '')
+        marca = request.data.get('marca', '')
+        modelo = request.data.get('modelo', '')
+
+        try:
+            sugerencia = obtener_sugerencia_ia(
+                descripcion=descripcion,
+                categoria_equipo=categoria_equipo,
+                marca=marca,
+                modelo=modelo,
+            )
+        except json.JSONDecodeError:
+            return Response(
+                {'detail': 'No se pudo interpretar la respuesta del servicio de IA.'},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        except Exception as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(sugerencia)
 
 
 class IntervencionViewSet(viewsets.ModelViewSet):

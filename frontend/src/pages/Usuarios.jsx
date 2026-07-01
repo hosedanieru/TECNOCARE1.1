@@ -114,7 +114,7 @@ export default function Usuarios() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Usuarios y Roles</h1>
         <button onClick={abrirNuevo}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+          className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800">
           + Nuevo Usuario
         </button>
       </div>

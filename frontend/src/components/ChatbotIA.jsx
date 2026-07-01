@@ -38,23 +38,32 @@ export default function ChatbotIA({ onAplicarSugerencia }) {
   const equipoInfo = equipos.find((e) => e.id === Number(equipoSeleccionado))
 
   const consultar = async () => {
-    if (!descripcion.trim()) return
-    setCargando(true)
-    setError('')
-    setSugerencia(null)
-    try {
-      const res = await mantenimientosService.sugerenciaIA({
-        descripcion,
-        categoria_equipo: equipoInfo?.categoria_nombre || '',
-        marca: equipoInfo?.marca || '',
-        modelo: equipoInfo?.modelo || '',
-      })
-      setSugerencia(res.data)
-    } catch (err) {
-      setError('No se pudo obtener la sugerencia. Verifica que el servidor esté corriendo.')
-      console.error(err)
+  if (!descripcion.trim()) return
+  setCargando(true)
+  setError('')
+  setSugerencia(null)
+  try {
+    const res = await mantenimientosService.sugerenciaIA({
+      descripcion,
+      categoria_equipo: equipoInfo?.categoria_nombre || '',
+      marca: equipoInfo?.marca || '',
+      modelo: equipoInfo?.modelo || '',
+    })
+    setSugerencia(res.data)
+  } catch (err) {
+    console.error('Error consultando IA:', err)
+    if (err.response) {
+      // El backend respondió con un error (400/500/502/403...)
+      const detalle = err.response.data?.detail || JSON.stringify(err.response.data)
+      setError(`Error del servidor (${err.response.status}): ${detalle}`)
+    } else if (err.request) {
+      // La request salió pero nunca hubo respuesta (CORS, servidor caído, red)
+      setError('No se pudo contactar al servidor. Verifica que Django esté corriendo y que CORS esté configurado.')
+    } else {
+      setError(`Error inesperado: ${err.message}`)
+    }
     } finally {
-      setCargando(false)
+    setCargando(false)
     }
   }
 

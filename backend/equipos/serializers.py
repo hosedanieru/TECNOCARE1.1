@@ -55,7 +55,9 @@ class EquipoDetailSerializer(serializers.ModelSerializer):
             'dias_para_proximo_mantenimiento', 'alerta_vencida', 'alerta_proxima',
             'observaciones', 'fecha_creacion', 'fecha_actualizacion',
         ]
-        read_only_fields = ['id', 'fecha_creacion', 'fecha_actualizacion']
+        # codigo_interno se autogenera en Equipo.save(); nunca se exige
+        # ni se acepta desde el cliente.
+        read_only_fields = ['id', 'codigo_interno', 'fecha_creacion', 'fecha_actualizacion']
 
     def get_responsable_nombre(self, obj):
         return obj.responsable.get_full_name() if obj.responsable else None

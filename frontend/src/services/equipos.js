@@ -10,4 +10,6 @@ export const equiposService = {
   alertasProximas: (dias = 30) => api.get('/equipos/alertas_proximas/', { params: { dias } }),
   categorias: () => api.get('/categorias-equipo/'),
   crearCategoria: (datos) => api.post('/categorias-equipo/', datos),
+  actualizarCategoria: (id, datos) => api.patch(`/categorias-equipo/${id}/`, datos),
+  eliminarCategoria: (id) => api.delete(`/categorias-equipo/${id}/`),
 }

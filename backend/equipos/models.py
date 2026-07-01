@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -16,6 +16,29 @@ class CategoriaEquipo(models.Model):
         return self.nombre
 
 
+class SecuenciaEquipo(models.Model):
+    """
+    Fila única (pk=1) que lleva el contador para generar códigos internos
+    secuenciales (EQ-0001, EQ-0002...) sin colisiones entre requests
+    concurrentes. select_for_update() bloquea la fila hasta que termine
+    la transacción, así dos creaciones simultáneas nunca calculan el
+    mismo número.
+    """
+    ultimo_numero = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'Secuencia de Equipo'
+        verbose_name_plural = 'Secuencias de Equipo'
+
+    @classmethod
+    def siguiente_numero(cls):
+        with transaction.atomic():
+            secuencia, _ = cls.objects.select_for_update().get_or_create(pk=1)
+            secuencia.ultimo_numero += 1
+            secuencia.save(update_fields=['ultimo_numero'])
+            return secuencia.ultimo_numero
+
+
 class Equipo(models.Model):
     class Estado(models.TextChoices):
         OPERATIVO = 'OPERATIVO', 'Operativo'
@@ -23,7 +46,9 @@ class Equipo(models.Model):
         FUERA_DE_SERVICIO = 'FUERA_DE_SERVICIO', 'Fuera de servicio'
         DADO_DE_BAJA = 'DADO_DE_BAJA', 'Dado de baja'
 
-    codigo_interno = models.CharField(max_length=30, unique=True)
+    # blank=True: ya no es obligatorio en formularios/serializers, se
+    # autogenera en save() si viene vacío. unique=True se mantiene.
+    codigo_interno = models.CharField(max_length=30, unique=True, blank=True)
     nombre = models.CharField(max_length=150)
     categoria = models.ForeignKey(
         CategoriaEquipo, on_delete=models.PROTECT, related_name='equipos'
@@ -53,6 +78,12 @@ class Equipo(models.Model):
 
     def __str__(self):
         return f'{self.codigo_interno} — {self.nombre}'
+
+    def save(self, *args, **kwargs):
+        if not self.codigo_interno:
+            numero = SecuenciaEquipo.siguiente_numero()
+            self.codigo_interno = f'EQ-{numero:04d}'
+        super().save(*args, **kwargs)
 
     @property
     def proximo_mantenimiento(self):

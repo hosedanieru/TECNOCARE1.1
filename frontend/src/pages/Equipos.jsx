@@ -95,6 +95,21 @@ export default function Equipos() {
     }
   }
 
+  const handleEliminar = async (eq) => {
+    const confirmar = window.confirm(
+      `¿Seguro que quieres eliminar el equipo "${eq.nombre}" (${eq.codigo_interno})? Esta acción no se puede deshacer.`
+    )
+    if (!confirmar) return
+
+    try {
+      await equiposService.eliminar(eq.id)
+      cargarDatos()
+    } catch (err) {
+      const data = err.response?.data
+      setError(data?.detail || 'Error al eliminar el equipo.')
+    }
+  }
+
   const estadoColor = {
     OPERATIVO: 'bg-green-100 text-green-800',
     EN_MANTENIMIENTO: 'bg-yellow-100 text-yellow-800',
@@ -108,7 +123,7 @@ export default function Equipos() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Equipos</h1>
+          <h1 className="text-2xl font-bold text-black">Equipos</h1>
           {esTecnico && (
             <p className="text-sm text-gray-500 mt-1">
               Mostrando solo los equipos asignados a ti
@@ -118,7 +133,7 @@ export default function Equipos() {
         {puedeGestionar && (
           <button
             onClick={() => mostrarForm ? setMostrarForm(false) : abrirNuevo()}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
           >
             {mostrarForm ? 'Cancelar' : '+ Nuevo Equipo'}
           </button>
@@ -236,10 +251,14 @@ export default function Equipos() {
                   </td>
                   <td className="px-4 py-3">{eq.proximo_mantenimiento || '—'}</td>
                   {puedeGestionar && (
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 flex gap-2">
                       <button onClick={() => abrirEdicion(eq)}
                         className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded hover:bg-gray-300">
                         Editar
+                      </button>
+                      <button onClick={() => handleEliminar(eq)}
+                        className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200">
+                        Eliminar
                       </button>
                     </td>
                   )}
