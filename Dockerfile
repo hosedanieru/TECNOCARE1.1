@@ -27,4 +27,4 @@ RUN python manage.py collectstatic --noinput
 RUN python -m pip install gunicorn
 
 EXPOSE 8000
-CMD gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2
+CMD ["/app/backend/entrypoint.sh"]
