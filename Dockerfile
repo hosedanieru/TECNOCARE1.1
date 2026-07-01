@@ -27,4 +27,4 @@ RUN python manage.py collectstatic --noinput
 RUN python -m pip install gunicorn
 
 EXPOSE 8000
-CMD ["/app/backend/entrypoint.sh"]
+CMD ["/bin/sh", "/app/backend/entrypoint.sh"]
