@@ -3,32 +3,7 @@ import { mantenimientosService } from '../services/mantenimientos'
 import { equiposService } from '../services/equipos'
 import { usuariosService } from '../services/usuarios'
 import { useAuth } from '../context/AuthContext'
-import { extractErrorMessage } from '../hooks/useErrorHandler'
-
-const ESTADO_COLOR = {
-  PROGRAMADO: 'bg-blue-100 text-blue-800',
-  EN_PROCESO: 'bg-yellow-100 text-yellow-800',
-  FINALIZADO: 'bg-green-100 text-green-800',
-  CANCELADO: 'bg-gray-100 text-gray-800',
-}
-
-const TIPO_COLOR = {
-  PREVENTIVO: 'bg-emerald-100 text-emerald-800',
-  CORRECTIVO: 'bg-orange-100 text-orange-800',
-  PREDICTIVO: 'bg-purple-100 text-purple-800',
-}
-
-const PRIORIDAD_COLOR = {
-  BAJA: 'bg-gray-100 text-gray-600',
-  MEDIA: 'bg-blue-100 text-blue-700',
-  ALTA: 'bg-orange-100 text-orange-700',
-  CRITICA: 'bg-red-100 text-red-700',
-}
-
-const FORM_VACIO = {
-  equipo: '', tipo: 'PREVENTIVO', prioridad: 'MEDIA',
-  titulo: '', descripcion: '', fecha_programada: '', tecnico_asignado: '',
-}
+import ChatbotIA from '../components/ChatbotIA'
 
 export default function Mantenimientos() {
   const [mantenimientos, setMantenimientos] = useState([])
@@ -36,20 +11,20 @@ export default function Mantenimientos() {
   const [tecnicos, setTecnicos] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
-  const [error, setError] = useState('')
-  const [form, setForm] = useState(FORM_VACIO)
+  const { esAdministrador, esSupervisor, esTecnico, usuario } = useAuth()
+  const puedeCrear = esAdministrador || esSupervisor
 
-  // Modal finalizar
-  const [finalizandoId, setFinalizandoId] = useState(null)
-  const [formFinalizar, setFormFinalizar] = useState({
-    solucion_aplicada: '', diagnostico: '', costo_repuestos: '', costo_mano_obra: '',
+  const [form, setForm] = useState({
+    equipo: '', tipo: 'PREVENTIVO', titulo: '', descripcion: '',
+    fecha_programada: '', tecnico_asignado: '',
+    costo_repuestos: 0, costo_mano_obra: 0,
   })
-
-  const { esTecnico, puedeCrearMantenimiento, usuario } = useAuth()
 
   const cargarDatos = async () => {
     setCargando(true)
-    const params = esTecnico ? { tecnico_asignado: usuario.id } : {}
+    const params = {}
+    if (esTecnico) params.tecnico_asignado = usuario.id
+
     const [resMant, resEq, resTec] = await Promise.all([
       mantenimientosService.listar(params),
       equiposService.listar(esTecnico ? { responsable: usuario.id } : {}),
@@ -65,80 +40,75 @@ export default function Mantenimientos() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError('')
     const datos = { ...form }
     if (!datos.tecnico_asignado) delete datos.tecnico_asignado
-    try {
-      await mantenimientosService.crear(datos)
-      setMostrarForm(false)
-      setForm(FORM_VACIO)
-      cargarDatos()
-    } catch (err) {
-      setError(extractErrorMessage(err))
-    }
+    await mantenimientosService.crear(datos)
+    setMostrarForm(false)
+    setForm({ equipo: '', tipo: 'PREVENTIVO', titulo: '', descripcion: '',
+              fecha_programada: '', tecnico_asignado: '', costo_repuestos: 0, costo_mano_obra: 0 })
+    cargarDatos()
   }
 
   const handleIniciar = async (id) => {
-    try {
-      await mantenimientosService.iniciar(id)
-      cargarDatos()
-    } catch (err) {
-      alert(extractErrorMessage(err))
-    }
+    await mantenimientosService.iniciar(id)
+    cargarDatos()
   }
 
-  const handleFinalizar = async (e) => {
-    e.preventDefault()
-    try {
-      await mantenimientosService.finalizar(finalizandoId, formFinalizar)
-      setFinalizandoId(null)
-      setFormFinalizar({ solucion_aplicada: '', diagnostico: '', costo_repuestos: '', costo_mano_obra: '' })
-      cargarDatos()
-    } catch (err) {
-      alert(extractErrorMessage(err))
-    }
+  const handleFinalizar = async (id) => {
+    const solucion = prompt('Describe brevemente la solución aplicada:')
+    if (solucion === null) return
+    await mantenimientosService.finalizar(id, { solucion_aplicada: solucion })
+    cargarDatos()
   }
 
-  const handleCancelar = async (id, titulo) => {
-    const motivo = prompt(`¿Motivo para cancelar "${titulo}"? (opcional)`)
-    if (motivo === null) return
-    try {
-      await mantenimientosService.cancelar(id, motivo)
-      cargarDatos()
-    } catch (err) {
-      alert(extractErrorMessage(err))
-    }
+  const aplicarSugerencia = (sugerencia) => {
+    setForm((prev) => ({
+      ...prev,
+      equipo: sugerencia.equipo || prev.equipo,
+      tipo: sugerencia.tipo_sugerido || prev.tipo,
+      descripcion: prev.descripcion || sugerencia.diagnostico_sugerido,
+      costo_repuestos: sugerencia.costo_repuestos_estimado || 0,
+      costo_mano_obra: sugerencia.costo_mano_obra_estimado || 0,
+    }))
+    setMostrarForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  if (cargando) return <p className="text-gray-500 p-6">Cargando mantenimientos...</p>
+  const estadoColor = {
+    PROGRAMADO: 'bg-blue-100 text-blue-800',
+    EN_PROCESO: 'bg-yellow-100 text-yellow-800',
+    FINALIZADO: 'bg-green-100 text-green-800',
+    CANCELADO: 'bg-gray-100 text-gray-800',
+  }
+
+  const tipoColor = {
+    PREVENTIVO: 'bg-emerald-100 text-emerald-800',
+    CORRECTIVO: 'bg-orange-100 text-orange-800',
+    PREDICTIVO: 'bg-purple-100 text-purple-800',
+  }
+
+  if (cargando) return <p>Cargando mantenimientos...</p>
 
   return (
     <div>
-      {/* Encabezado */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Mantenimientos</h1>
           {esTecnico && (
-            <p className="text-sm text-gray-500 mt-1">Mostrando tus mantenimientos asignados</p>
+            <p className="text-sm text-gray-500 mt-1">Mostrando solo los mantenimientos asignados a ti</p>
           )}
         </div>
-        {puedeCrearMantenimiento && (
-          <button
-            onClick={() => setMostrarForm(!mostrarForm)}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
+        {puedeCrear && (
+          <button onClick={() => setMostrarForm(!mostrarForm)}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
             {mostrarForm ? 'Cancelar' : '+ Nuevo Mantenimiento'}
           </button>
         )}
       </div>
 
-      {/* Formulario nuevo */}
       {mostrarForm && (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow mb-6 grid grid-cols-2 gap-4">
           <h2 className="col-span-2 font-semibold text-gray-700">Nuevo mantenimiento</h2>
-          {error && (
-            <div className="col-span-2 bg-red-100 text-red-700 px-4 py-2 rounded text-sm">{error}</div>
-          )}
 
           <select required value={form.equipo}
             onChange={(e) => setForm({ ...form, equipo: e.target.value })}
@@ -157,14 +127,13 @@ export default function Mantenimientos() {
             <option value="PREDICTIVO">Predictivo</option>
           </select>
 
-          <select value={form.prioridad}
-            onChange={(e) => setForm({ ...form, prioridad: e.target.value })}
-            className="border rounded px-3 py-2">
-            <option value="BAJA">Baja</option>
-            <option value="MEDIA">Media</option>
-            <option value="ALTA">Alta</option>
-            <option value="CRITICA">Crítica</option>
-          </select>
+          <input placeholder="Título" required value={form.titulo}
+            onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+            className="border rounded px-3 py-2 col-span-2" />
+
+          <textarea placeholder="Descripción del problema" required value={form.descripcion}
+            onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+            className="border rounded px-3 py-2 col-span-2" rows={3} />
 
           <label className="text-sm text-gray-600 flex flex-col gap-1">
             Fecha programada
@@ -172,15 +141,6 @@ export default function Mantenimientos() {
               onChange={(e) => setForm({ ...form, fecha_programada: e.target.value })}
               className="border rounded px-3 py-2" />
           </label>
-
-          <input placeholder="Título" required value={form.titulo}
-            onChange={(e) => setForm({ ...form, titulo: e.target.value })}
-            className="border rounded px-3 py-2 col-span-2" />
-
-          <textarea placeholder="Descripción del trabajo a realizar" required
-            value={form.descripcion}
-            onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
-            className="border rounded px-3 py-2 col-span-2" rows={3} />
 
           <label className="text-sm text-gray-600 flex flex-col gap-1">
             Técnico asignado
@@ -194,6 +154,26 @@ export default function Mantenimientos() {
             </select>
           </label>
 
+          <label className="text-sm text-gray-600 flex flex-col gap-1">
+            Costo repuestos (COP)
+            <input type="number" value={form.costo_repuestos} min="0"
+              onChange={(e) => setForm({ ...form, costo_repuestos: e.target.value })}
+              className="border rounded px-3 py-2" />
+          </label>
+
+          <label className="text-sm text-gray-600 flex flex-col gap-1">
+            Costo mano de obra (COP)
+            <input type="number" value={form.costo_mano_obra} min="0"
+              onChange={(e) => setForm({ ...form, costo_mano_obra: e.target.value })}
+              className="border rounded px-3 py-2" />
+          </label>
+
+          <div className="col-span-2 bg-blue-50 rounded px-4 py-2 text-sm text-blue-700">
+            Total estimado: <span className="font-bold">
+              ${(Number(form.costo_repuestos) + Number(form.costo_mano_obra)).toLocaleString('es-CO')}
+            </span>
+          </div>
+
           <button type="submit"
             className="col-span-2 bg-green-600 text-white py-2 rounded hover:bg-green-700">
             Guardar Mantenimiento
@@ -201,54 +181,6 @@ export default function Mantenimientos() {
         </form>
       )}
 
-      {/* Modal finalizar */}
-      {finalizandoId && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <form onSubmit={handleFinalizar} className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md grid gap-4">
-            <h2 className="font-semibold text-gray-800 text-lg">Finalizar mantenimiento</h2>
-
-            <textarea placeholder="Diagnóstico (opcional)"
-              value={formFinalizar.diagnostico}
-              onChange={(e) => setFormFinalizar({ ...formFinalizar, diagnostico: e.target.value })}
-              className="border rounded px-3 py-2" rows={2} />
-
-            <textarea placeholder="Solución aplicada" required
-              value={formFinalizar.solucion_aplicada}
-              onChange={(e) => setFormFinalizar({ ...formFinalizar, solucion_aplicada: e.target.value })}
-              className="border rounded px-3 py-2" rows={3} />
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-sm text-gray-600 flex flex-col gap-1">
-                Costo repuestos ($)
-                <input type="number" min="0" step="0.01"
-                  value={formFinalizar.costo_repuestos}
-                  onChange={(e) => setFormFinalizar({ ...formFinalizar, costo_repuestos: e.target.value })}
-                  className="border rounded px-3 py-2" />
-              </label>
-              <label className="text-sm text-gray-600 flex flex-col gap-1">
-                Costo mano de obra ($)
-                <input type="number" min="0" step="0.01"
-                  value={formFinalizar.costo_mano_obra}
-                  onChange={(e) => setFormFinalizar({ ...formFinalizar, costo_mano_obra: e.target.value })}
-                  className="border rounded px-3 py-2" />
-              </label>
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <button type="button" onClick={() => setFinalizandoId(null)}
-                className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-50">
-                Cancelar
-              </button>
-              <button type="submit"
-                className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-                Confirmar finalización
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Tabla */}
       {mantenimientos.length === 0 ? (
         <div className="bg-gray-50 border border-gray-200 text-gray-500 px-4 py-8 rounded text-center">
           {esTecnico ? 'No tienes mantenimientos asignados.' : 'No hay mantenimientos registrados.'}
@@ -261,52 +193,44 @@ export default function Mantenimientos() {
                 <th className="px-4 py-3">Equipo</th>
                 <th className="px-4 py-3">Título</th>
                 <th className="px-4 py-3">Tipo</th>
-                <th className="px-4 py-3">Prioridad</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Técnico</th>
                 <th className="px-4 py-3">Fecha</th>
+                <th className="px-4 py-3">Costo total</th>
                 <th className="px-4 py-3">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {mantenimientos.map((m) => (
-                <tr key={m.id} className="border-t hover:bg-gray-50">
+                <tr key={m.id} className="border-t">
                   <td className="px-4 py-3 font-medium">{m.equipo_codigo}</td>
                   <td className="px-4 py-3">{m.titulo}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs ${TIPO_COLOR[m.tipo]}`}>
+                    <span className={`px-2 py-1 rounded-full text-xs ${tipoColor[m.tipo]}`}>
                       {m.tipo_display}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs ${PRIORIDAD_COLOR[m.prioridad]}`}>
-                      {m.prioridad_display}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs ${ESTADO_COLOR[m.estado]}`}>
+                    <span className={`px-2 py-1 rounded-full text-xs ${estadoColor[m.estado]}`}>
                       {m.estado_display}
                     </span>
                   </td>
                   <td className="px-4 py-3">{m.tecnico_nombre}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{m.fecha_programada}</td>
-                  <td className="px-4 py-3 space-x-1 whitespace-nowrap">
-                    {m.estado === 'PROGRAMADO' && (esTecnico || puedeCrearMantenimiento) && (
+                  <td className="px-4 py-3">{m.fecha_programada}</td>
+                  <td className="px-4 py-3 font-medium">
+                    ${Number(m.costo_total).toLocaleString('es-CO')}
+                  </td>
+                  <td className="px-4 py-3 space-x-2">
+                    {m.estado === 'PROGRAMADO' && (esTecnico || puedeCrear) && (
                       <button onClick={() => handleIniciar(m.id)}
                         className="text-xs bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600">
                         Iniciar
                       </button>
                     )}
-                    {m.estado === 'EN_PROCESO' && (esTecnico || puedeCrearMantenimiento) && (
-                      <button onClick={() => setFinalizandoId(m.id)}
+                    {m.estado === 'EN_PROCESO' && (esTecnico || puedeCrear) && (
+                      <button onClick={() => handleFinalizar(m.id)}
                         className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700">
                         Finalizar
-                      </button>
-                    )}
-                    {['PROGRAMADO', 'EN_PROCESO'].includes(m.estado) && puedeCrearMantenimiento && (
-                      <button onClick={() => handleCancelar(m.id, m.titulo)}
-                        className="text-xs bg-gray-300 text-gray-700 px-2 py-1 rounded hover:bg-gray-400">
-                        Cancelar
                       </button>
                     )}
                   </td>
@@ -316,6 +240,8 @@ export default function Mantenimientos() {
           </table>
         </div>
       )}
+
+      <ChatbotIA onAplicarSugerencia={aplicarSugerencia} />
     </div>
   )
 }
