@@ -1,4 +1,5 @@
 import json
+import os
 from groq import Groq
 from django.conf import settings
 
@@ -31,15 +32,19 @@ Reglas para los costos en pesos colombianos:
 
 
 def obtener_sugerencia_ia(descripcion, categoria_equipo=None, marca=None, modelo=None):
-    cliente = Groq(api_key=settings.GROQ_API_KEY)
+    api_key = getattr(settings, 'GROQ_API_KEY', None) or os.getenv('GROQ_API_KEY')
+    if not api_key:
+        raise ValueError('GROQ_API_KEY no está configurada.')
 
-    contexto = ""
+    cliente = Groq(api_key=api_key)
+
+    contexto = ''
     if categoria_equipo:
-        contexto += f"Categoría del equipo: {categoria_equipo}. "
+        contexto += f'Categoría del equipo: {categoria_equipo}. '
     if marca:
-        contexto += f"Marca: {marca}. "
+        contexto += f'Marca: {marca}. '
     if modelo:
-        contexto += f"Modelo: {modelo}. "
+        contexto += f'Modelo: {modelo}. '
 
     mensaje_usuario = f"{contexto}\nDescripción del problema: {descripcion}"
 

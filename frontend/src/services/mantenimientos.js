@@ -9,12 +9,9 @@ export const mantenimientosService = {
   finalizar: (id, datos) => api.patch(`/mantenimientos/${id}/finalizar/`, datos),
   cancelar: (id, motivo) => api.patch(`/mantenimientos/${id}/cancelar/`, { motivo }),
   calificar: (id, calificacion) => api.patch(`/mantenimientos/${id}/calificar/`, { calificacion_resultado: calificacion }),
-
-  sugerenciaIA: (datos) => api.post('/mantenimientos/sugerencia_ia/', datos),
-
   misTareas: () => api.get('/mantenimientos/mis_tareas/'),
   resumen: () => api.get('/mantenimientos/resumen/'),
-
+  sugerenciaIA: (datos) => api.post('/mantenimientos/sugerencia_ia/', datos),
   intervenciones: {
     listar: (mantenimientoId) => api.get('/intervenciones/', { params: { mantenimiento: mantenimientoId } }),
     crear: (datos) => api.post('/intervenciones/', datos),

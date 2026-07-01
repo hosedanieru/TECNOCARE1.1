@@ -1,5 +1,3 @@
-import json
-
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -119,16 +117,16 @@ class MantenimientoViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def sugerencia_ia(self, request):
-        descripcion = request.data.get('descripcion', '').strip()
+        descripcion = str(request.data.get('descripcion', '')).strip()
         if not descripcion:
             return Response(
-                {'detail': 'La descripción es obligatoria.'},
+                {'detail': 'La descripción es obligatoria para obtener una sugerencia de IA.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        categoria_equipo = request.data.get('categoria_equipo', '')
-        marca = request.data.get('marca', '')
-        modelo = request.data.get('modelo', '')
+        categoria_equipo = request.data.get('categoria_equipo')
+        marca = request.data.get('marca')
+        modelo = request.data.get('modelo')
 
         try:
             sugerencia = obtener_sugerencia_ia(
@@ -137,18 +135,11 @@ class MantenimientoViewSet(viewsets.ModelViewSet):
                 marca=marca,
                 modelo=modelo,
             )
-        except json.JSONDecodeError:
-            return Response(
-                {'detail': 'No se pudo interpretar la respuesta del servicio de IA.'},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-        except Exception as e:
-            return Response(
-                {'detail': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
-        return Response(sugerencia)
+            return Response(sugerencia)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class IntervencionViewSet(viewsets.ModelViewSet):
