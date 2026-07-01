@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AlterModelOptions(
             name='categoriaequipo',
-            options={'ordering': ['nombre'], 'verbose_name': 'Categoría de Equipo', 'verbose_name_plural': 'Categorías de Equipos'},
+            options={'ordering': ['nombre'], 'verbose_name': 'Categoria de Equipo', 'verbose_name_plural': 'Categorias de Equipos'},
         ),
         migrations.AlterModelOptions(
             name='equipo',
