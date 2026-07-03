@@ -5,7 +5,7 @@ import urllib.parse
 from decouple import config, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-FRONTEND_DIST = BASE_DIR.parent / "frontend" / "dist"
+FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
