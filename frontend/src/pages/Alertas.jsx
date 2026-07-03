@@ -1,15 +1,34 @@
 import { useEffect, useState } from 'react'
 import { equiposService } from '../services/equipos'
+import { useAuth } from '../context/AuthContext'
 
 export default function Alertas() {
   const [datos, setDatos] = useState({ total: 0, vencidos: 0, proximos: 0, equipos: [] })
   const [dias, setDias] = useState(30)
   const [cargando, setCargando] = useState(true)
+  const { esTecnico, usuario } = useAuth()
 
   const cargarAlertas = async () => {
     setCargando(true)
-    const res = await equiposService.alertasProximas(dias)
-    setDatos(res.data)
+    const params = esTecnico ? { responsable: usuario.id } : {}
+    const res = await equiposService.alertasProximas(dias, params)
+    let data = res.data
+
+    // Respaldo por si el backend aún no filtra por responsable: filtramos en el cliente.
+    if (esTecnico && Array.isArray(data.equipos)) {
+      const propios = data.equipos.filter(
+        (eq) => eq.responsable === usuario.id || eq.responsable_id === usuario.id
+      )
+      data = {
+        ...data,
+        equipos: propios,
+        total: propios.length,
+        vencidos: propios.filter((eq) => eq.dias_para_proximo_mantenimiento < 0).length,
+        proximos: propios.filter((eq) => eq.dias_para_proximo_mantenimiento >= 0).length,
+      }
+    }
+
+    setDatos(data)
     setCargando(false)
   }
 
@@ -30,7 +49,12 @@ export default function Alertas() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Alertas de Mantenimiento</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Alertas de Mantenimiento</h1>
+          {esTecnico && (
+            <p className="text-sm text-gray-500 mt-1">Mostrando solo las alertas de tus equipos asignados</p>
+          )}
+        </div>
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-600">Horizonte:</span>
           <select value={dias} onChange={(e) => setDias(Number(e.target.value))}
@@ -65,7 +89,9 @@ export default function Alertas() {
         <p className="text-gray-500">Cargando alertas...</p>
       ) : datos.equipos.length === 0 ? (
         <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
-          No hay equipos con mantenimiento pendiente en los próximos {dias} días. ✅
+          {esTecnico
+            ? `No tienes equipos con mantenimiento pendiente en los próximos ${dias} días. ✅`
+            : `No hay equipos con mantenimiento pendiente en los próximos ${dias} días. ✅`}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

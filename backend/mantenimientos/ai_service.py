@@ -1,35 +1,79 @@
 import json
 import os
-from groq import Groq
+from groq import Groq, GroqError
 from django.conf import settings
 
-PROMPT_SISTEMA = """Eres un asistente técnico especializado en mantenimiento de equipos
-(cómputo, redes, maquinaria industrial) en Colombia. A partir de la descripción de una
-falla o solicitud, responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional,
-sin marcas de markdown, con esta estructura exacta:
+PROMPT_SISTEMA = """
+Eres TecnoCare AI, asistente especializado en mantenimiento de equipos en Colombia.
+
+Áreas:
+- Computadores, laptops, servidores, impresoras
+- Redes (routers, switches, AP, cableado)
+- Equipos electrónicos
+- Maquinaria industrial y electromecánica
+
+Tu función es analizar síntomas, identificar fallas probables y sugerir soluciones técnicas realistas.
+
+Si la consulta NO está relacionada con mantenimiento, diagnóstico, reparación o soporte técnico, responde solo:
 
 {
-  "diagnostico_sugerido": "string breve con el diagnóstico técnico más probable",
-  "solucion_sugerida": "string con los pasos recomendados para solucionarlo",
-  "prioridad_sugerida": "BAJA" | "MEDIA" | "ALTA" | "CRITICA",
-  "tipo_sugerido": "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO",
-  "costo_repuestos_estimado": numero en pesos colombianos sin signos ni puntos,
-  "costo_mano_obra_estimado": numero en pesos colombianos sin signos ni puntos,
-  "justificacion": "string breve explicando la prioridad y los costos estimados"
+  "error": "Consulta fuera del alcance",
+  "mensaje": "Soy TecnoCare AI y solo respondo consultas de mantenimiento y diagnóstico técnico."
 }
 
-Reglas para la prioridad:
-- CRITICA: el equipo está totalmente fuera de servicio o representa riesgo de seguridad.
-- ALTA: el equipo funciona parcialmente y afecta operaciones importantes.
-- MEDIA: hay una falla pero el equipo sigue operativo.
-- BAJA: mantenimiento de rutina o mejora preventiva, sin urgencia.
+Para consultas válidas responde ÚNICAMENTE JSON válido:
 
-Reglas para los costos en pesos colombianos:
-- Estima costos realistas para Colombia.
-- Mano de obra: aproximadamente 50000 por hora de trabajo técnico.
-- Si no se necesitan repuestos, pon 0.
-- Devuelve solo números enteros, sin puntos ni comas."""
+{
+  "diagnosticos_probables": [
+    {
+      "diagnostico": "string",
+      "probabilidad": "ALTA | MEDIA | BAJA"
+    }
+  ],
+  "diagnostico_principal": "string",
+  "solucion_sugerida": [
+    "paso 1",
+    "paso 2",
+    "paso 3"
+  ],
+  "prioridad_sugerida": "BAJA | MEDIA | ALTA | CRITICA",
+  "tipo_sugerido": "PREVENTIVO | CORRECTIVO | PREDICTIVO",
+  "costo_repuestos_estimado": numero,
+  "costo_mano_obra_estimado": numero,
+  "tiempo_estimado_horas": numero,
+  "justificacion": "string"
+}
 
+Reglas:
+- 
+- Usa diagnósticos técnicos específicos.
+Ejemplos válidos:
+- Fuente de alimentación defectuosa
+- Sobrecalentamiento por polvo
+- SSD con sectores dañados
+
+Prioridad:
+- CRITICA: fuera de servicio o riesgo
+- ALTA: afecta operación importante
+- MEDIA: falla parcial
+- BAJA: mantenimiento preventivo
+
+Costos en COP:
+- Diagnóstico básico: 50000
+- Preventivo: 80000-150000
+- Reparación media: 150000-300000
+- Compleja: 300000+
+
+Repuestos ejemplo:
+- Pasta térmica: 30000
+- SSD: 180000-350000
+- RAM: 120000-400000
+- Fuente: 150000-350000
+
+Usa solo enteros, sin puntos ni comas.
+Sin markdown.
+Sin texto fuera del JSON.
+"""
 
 def obtener_sugerencia_ia(descripcion, categoria_equipo=None, marca=None, modelo=None):
     api_key = getattr(settings, 'GROQ_API_KEY', None) or os.getenv('GROQ_API_KEY')
@@ -48,17 +92,38 @@ def obtener_sugerencia_ia(descripcion, categoria_equipo=None, marca=None, modelo
 
     mensaje_usuario = f"{contexto}\nDescripción del problema: {descripcion}"
 
-    respuesta = cliente.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=[
-            {"role": "system", "content": PROMPT_SISTEMA},
-            {"role": "user", "content": mensaje_usuario},
-        ],
-        temperature=0.3,
-        max_tokens=500,
-    )
+    try:
+        respuesta = cliente.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=[
+                {"role": "system", "content": PROMPT_SISTEMA},
+                {"role": "user", "content": mensaje_usuario},
+            ],
+            temperature=0.3,
+            # gpt-oss-20b gasta tokens "razonando" antes de escribir la
+            # respuesta, y ese razonamiento cuenta dentro de max_completion_tokens.
+            # Con un límite bajo (500), el modelo se queda sin tokens antes de
+            # llegar a escribir el JSON y devuelve contenido vacío.
+            max_completion_tokens=12000,
+            # No necesitamos razonamiento profundo para esta tarea estructurada;
+            # "low" deja más presupuesto de tokens disponible para el JSON final.
+            reasoning_effort="low",
+            response_format={"type": "json_object"},
+        )
+    except GroqError as exc:
+        # Errores de la API de Groq (auth, rate limit, modelo no disponible, etc.)
+        raise ValueError('No es posible contestar en este momento. Intenta de nuevo en unos minutos.') from exc
 
-    texto = respuesta.choices[0].message.content.strip()
+    texto = (respuesta.choices[0].message.content or '').strip()
     texto = texto.replace('```json', '').replace('```', '').strip()
 
-    return json.loads(texto)
+    if not texto:
+        # El modelo no devolvió contenido (por ejemplo, se quedó sin tokens
+        # razonando). No es un error del usuario, así que no exponemos detalles
+        # internos, solo un mensaje claro.
+        raise ValueError('No es posible contestar en este momento. Intenta de nuevo en unos minutos.')
+
+    try:
+        return json.loads(texto)
+    except json.JSONDecodeError as exc:
+        raise ValueError('No es posible contestar en este momento. Intenta de nuevo en unos minutos.') from exc

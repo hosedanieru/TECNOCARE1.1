@@ -18,17 +18,28 @@ export default function Equipos() {
   const [editandoId, setEditandoId] = useState(null)
   const [error, setError] = useState('')
   const { esAdministrador, esSupervisor, esTecnico, usuario } = useAuth()
+
+  // Reglas de visibilidad por rol:
+  // - Técnico: solo ve y gestiona los equipos que tiene asignados.
+  // - Supervisor: ve todos los equipos, con el técnico responsable de cada uno.
+  // - Administrador: ve todos los equipos y además puede crear/editar/eliminar.
   const puedeGestionar = esAdministrador
+  const puedeVerColumnaTecnico = esAdministrador || esSupervisor
+
   const [form, setForm] = useState(formVacio)
+
+  // Arma los parámetros de filtrado según el rol del usuario autenticado.
+  // El técnico solo recibe SUS equipos; supervisor y admin no llevan filtro.
+  const construirFiltroPorRol = () => {
+    if (esTecnico) {
+      return { responsable: usuario.id }
+    }
+    return {}
+  }
 
   const cargarDatos = async () => {
     setCargando(true)
-    const params = {}
-
-    // Si es técnico, solo ve sus equipos asignados
-    if (esTecnico) {
-      params.responsable = usuario.id
-    }
+    const params = construirFiltroPorRol()
 
     const [resEquipos, resCategorias, resTecnicos] = await Promise.all([
       equiposService.listar(params),
@@ -129,6 +140,11 @@ export default function Equipos() {
               Mostrando solo los equipos asignados a ti
             </p>
           )}
+          {esSupervisor && (
+            <p className="text-sm text-gray-500 mt-1">
+              Mostrando todos los equipos con su técnico responsable
+            </p>
+          )}
         </div>
         {puedeGestionar && (
           <button
@@ -140,7 +156,7 @@ export default function Equipos() {
         )}
       </div>
 
-      {mostrarForm && (
+      {mostrarForm && puedeGestionar && (
         <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow mb-6 grid grid-cols-2 gap-4">
           <h2 className="col-span-2 font-semibold text-gray-700">
             {editandoId ? 'Editar equipo' : 'Nuevo equipo'}
@@ -230,7 +246,7 @@ export default function Equipos() {
                 <th className="px-4 py-3">Nombre</th>
                 <th className="px-4 py-3">Categoría</th>
                 <th className="px-4 py-3">Ubicación</th>
-                <th className="px-4 py-3">Técnico</th>
+                {puedeVerColumnaTecnico && <th className="px-4 py-3">Técnico</th>}
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Próximo mant.</th>
                 {puedeGestionar && <th className="px-4 py-3">Acciones</th>}
@@ -243,7 +259,9 @@ export default function Equipos() {
                   <td className="px-4 py-3">{eq.nombre}</td>
                   <td className="px-4 py-3">{eq.categoria_nombre}</td>
                   <td className="px-4 py-3">{eq.ubicacion}</td>
-                  <td className="px-4 py-3">{eq.responsable_nombre || '—'}</td>
+                  {puedeVerColumnaTecnico && (
+                    <td className="px-4 py-3">{eq.responsable_nombre || '—'}</td>
+                  )}
                   <td className="px-4 py-3">
                     <span className={`px-2 py-1 rounded-full text-xs ${estadoColor[eq.estado]}`}>
                       {eq.estado_display}

@@ -68,6 +68,24 @@ class CambiarPasswordSerializer(serializers.Serializer):
         return value
 
 
+class SolicitarResetPasswordSerializer(serializers.Serializer):
+    """Paso 1: el usuario pide el link de restablecimiento con su correo."""
+    email = serializers.EmailField()
+
+
+class ConfirmarResetPasswordSerializer(serializers.Serializer):
+    """Paso 2: el usuario define la nueva contraseña usando el link del correo."""
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    password_nuevo = serializers.CharField(write_only=True, validators=[validate_password])
+    password_nuevo2 = serializers.CharField(write_only=True)
+
+    def validate(self, datos):
+        if datos['password_nuevo'] != datos['password_nuevo2']:
+            raise serializers.ValidationError({'password_nuevo2': 'Las contraseñas no coinciden.'})
+        return datos
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):

@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from .models import Equipo, CategoriaEquipo
 from .serializers import EquipoListSerializer, EquipoDetailSerializer, CategoriaEquipoSerializer
 from usuarios.permissions import SoloLecturaOEsAdministrador
+from usuarios.models import Usuario
 
 
 class CategoriaEquipoViewSet(viewsets.ModelViewSet):
@@ -26,6 +27,21 @@ class EquipoViewSet(viewsets.ModelViewSet):
     ordering_fields = ['codigo_interno', 'nombre', 'estado', 'fecha_creacion']
     ordering = ['codigo_interno']
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        usuario = self.request.user
+
+        # Un técnico solo puede ver (y por lo tanto solo puede recibir en
+        # cualquier acción: list, retrieve, alertas_proximas, etc.) los
+        # equipos que el administrador le asignó como responsable. Esta
+        # restricción se aplica siempre, sin importar qué parámetros mande
+        # el frontend, para que no dependa de que el cliente filtre bien.
+        if usuario.is_authenticated and usuario.rol == Usuario.Rol.TECNICO:
+            return qs.filter(responsable=usuario)
+
+        # Supervisor y administrador ven todos los equipos.
+        return qs
+
     def get_serializer_class(self):
         if self.action == 'list':
             return EquipoListSerializer
@@ -36,6 +52,7 @@ class EquipoViewSet(viewsets.ModelViewSet):
         """
         Devuelve equipos cuyo próximo mantenimiento cae dentro de `dias` días
         (parámetro query, default 30). Incluye vencidos (dias < 0).
+        Respeta la misma restricción por rol de get_queryset().
         """
         dias = int(request.query_params.get('dias', 30))
         hoy = timezone.localdate()

@@ -132,7 +132,7 @@ class MantenimientoViewSet(viewsets.ModelViewSet):
             sugerencia = obtener_sugerencia_ia(
                 descripcion=descripcion,
                 categoria_equipo=categoria_equipo,
-                marca=marca,
+                marca=marca ,
                 modelo=modelo,
             )
             return Response(sugerencia)

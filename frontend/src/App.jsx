@@ -3,6 +3,8 @@ import { AuthProvider } from './context/AuthContext'
 import RutaProtegida from './components/RutaProtegida'
 import MainLayout from './layouts/MainLayout'
 import Login from './pages/Login'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/Dashboard'
 import Equipos from './pages/Equipos'
 import CategoriasEquipo from './pages/Categoriasequipo'
@@ -17,6 +19,8 @@ function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/olvide-contrasena" element={<ForgotPassword />} />
+          <Route path="/restablecer-contrasena" element={<ResetPassword />} />
           <Route
             element={
               <RutaProtegida>
